@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/Badge';
 import { useOnboarding } from '@/state/onboarding';
 import { useIdentity } from '@/state/identity';
 import { supabase } from '@/lib/supabase';
+import { registerForPushAsync } from '@/lib/pushNotifications';
 import { success, warn } from '@/lib/haptics';
 
 export default function OnboardingVerify() {
@@ -18,7 +19,7 @@ export default function OnboardingVerify() {
   const reset = useOnboarding((s) => s.reset);
   const profile = useIdentity((s) => s.profile);
   const setIdentity = useIdentity((s) => s.setIdentity);
-  const [hasUploaded, setHasUploaded] = useState(false);
+  const [picked, setPicked] = useState<ImagePicker.ImagePickerAsset | null>(null);
   const [busy, setBusy] = useState(false);
 
   async function pickPassport() {
@@ -31,7 +32,31 @@ export default function OnboardingVerify() {
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       quality: 0.7,
     });
-    if (!result.canceled) setHasUploaded(true);
+    if (!result.canceled && result.assets[0]) {
+      setPicked(result.assets[0]);
+    }
+  }
+
+  async function uploadPassport(profileId: string): Promise<string | null> {
+    if (!picked) return null;
+    try {
+      const ext = (picked.uri.split('.').pop() ?? 'jpg').split('?')[0];
+      const path = `${profileId}/passport-${Date.now()}.${ext}`;
+      const res = await fetch(picked.uri);
+      const blob = await res.blob();
+      const { error } = await supabase.storage.from('kyc').upload(path, blob, {
+        contentType: blob.type || 'image/jpeg',
+        upsert: false,
+      });
+      if (error) {
+        console.warn('[verify] upload failed', error.message);
+        return null;
+      }
+      return path;
+    } catch (err) {
+      console.warn('[verify] upload exception', err);
+      return null;
+    }
   }
 
   async function finish() {
@@ -41,6 +66,7 @@ export default function OnboardingVerify() {
       return;
     }
     setBusy(true);
+
     const payload = {
       profile_id: profile.id,
       corridor: draft.corridor,
@@ -49,6 +75,7 @@ export default function OnboardingVerify() {
       dest_city: draft.dest_city,
       arrival_date: draft.arrival_date,
       visa_status: draft.visa_status,
+      visa_expires_on: draft.visa_expires_on,
       family_size: draft.family_size,
       dependents: draft.dependents,
     };
@@ -57,13 +84,44 @@ export default function OnboardingVerify() {
       .upsert(payload, { onConflict: 'profile_id' })
       .select('*')
       .single();
-    setBusy(false);
+
     if (error) {
+      setBusy(false);
       warn();
       Alert.alert('Could not save', error.message);
       return;
     }
     setIdentity(data);
+
+    let submissionCreated = false;
+    if (picked) {
+      const passportPath = await uploadPassport(profile.id);
+      if (passportPath) {
+        const { error: subErr } = await supabase.from('verification_submissions').insert({
+          profile_id: profile.id,
+          passport_url: passportPath,
+        });
+        if (!subErr) submissionCreated = true;
+      }
+    }
+
+    await supabase.from('events_log').insert({
+      profile_id: profile.id,
+      event_name: 'onboarding_complete',
+      props: { verification_submitted: submissionCreated },
+    });
+
+    if (submissionCreated) {
+      await supabase.from('events_log').insert({
+        profile_id: profile.id,
+        event_name: 'verification_submitted',
+        props: {},
+      });
+    }
+
+    registerForPushAsync(profile.id).catch(() => undefined);
+
+    setBusy(false);
     reset();
     success();
     router.replace('/(tabs)');
@@ -72,26 +130,47 @@ export default function OnboardingVerify() {
   return (
     <Screen scroll>
       <View className="px-6 pt-12">
-        <Badge label="Optional — unlocks community + premium" tone="marigold" />
+        <Badge label="Verification" tone="marigold" />
         <Text variant="h1" className="mt-4">
           Verify with your passport.
         </Text>
         <Text variant="body" muted className="mt-2">
-          Verified members can post in communities, leave reviews on Trusted vendors, and access SettleMe Premium. Your photo never leaves our encrypted storage.
+          Verified members can post in communities, leave reviews on Trusted vendors, and message
+          verified vendors. Photo stays in our encrypted vault.
         </Text>
 
         <View className="mt-6 gap-3">
           <Card onPress={pickPassport}>
-            <Text variant="h3">{hasUploaded ? 'Passport added ✓' : 'Upload passport photo'}</Text>
+            <Text variant="h3">{picked ? 'Passport added ✓' : 'Upload passport photo'}</Text>
             <Text variant="small" muted>
-              We need the photo page. Auto-cropped, never shared.
+              Photo page only. Auto-cropped, never shared.
             </Text>
           </Card>
+
+          {picked ? (
+            <Card>
+              <Badge label="Pending review" tone="marigold" />
+              <Text variant="small" muted className="mt-2">
+                Most submissions are reviewed within 24 hours. You'll get a push notification.
+              </Text>
+            </Card>
+          ) : null}
         </View>
 
         <View className="mt-8 gap-2">
-          <Button title="Save & enter SettleMe" onPress={finish} loading={busy} fullWidth size="lg" />
-          <Button title="Skip for now" onPress={finish} variant="ghost" />
+          <Button
+            title={picked ? 'Submit & enter SettleMe' : 'Save & enter SettleMe'}
+            onPress={finish}
+            loading={busy}
+            fullWidth
+            size="lg"
+          />
+          <Button
+            title="Skip verification for now"
+            onPress={finish}
+            variant="ghost"
+            disabled={!!picked}
+          />
         </View>
       </View>
     </Screen>

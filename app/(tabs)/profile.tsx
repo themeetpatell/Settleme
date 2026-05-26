@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { View, Alert } from 'react-native';
+import { useRouter } from 'expo-router';
 import { Screen } from '@/components/ui/Screen';
 import { Text } from '@/components/ui/Text';
 import { Card } from '@/components/ui/Card';
@@ -12,6 +13,7 @@ import { useIdentity } from '@/state/identity';
 import { supabase } from '@/lib/supabase';
 
 export default function ProfileTab() {
+  const router = useRouter();
   const profile = useIdentity((s) => s.profile);
   const identity = useIdentity((s) => s.identity);
   const reset = useIdentity((s) => s.reset);
@@ -38,6 +40,16 @@ export default function ProfileTab() {
 
         <View className="mt-6 gap-3">
           <VisaTimeline identity={identity} />
+
+          <Card onPress={() => router.push('/(messaging)/inbox')}>
+            <Badge label="Messages" tone="ink" />
+            <Text variant="h3" className="mt-2">
+              Inbox
+            </Text>
+            <Text variant="small" muted className="mt-1">
+              Your chats with SettleMe-trusted vendors.
+            </Text>
+          </Card>
 
           <Card onPress={() => setPaywall(true)}>
             <Badge label="Premium" tone="marigold" />

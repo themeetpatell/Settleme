@@ -7,8 +7,17 @@ import { supabase } from './supabase';
 export type AgentStreamEvent =
   | { type: 'meta'; thread_id: string; user_message_id: string }
   | { type: 'delta'; text: string }
+  | { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> }
+  | {
+      type: 'tool_result';
+      tool_use_id: string;
+      name: string;
+      ok: boolean;
+      data: unknown;
+      error: string | null;
+    }
   | { type: 'usage'; usage: Record<string, number> }
-  | { type: 'done'; stop_reason: string }
+  | { type: 'done'; stop_reason: string; iterations?: number }
   | { type: 'error'; message: string };
 
 export interface StreamArgs {
@@ -79,10 +88,21 @@ function parseSseBlock(raw: string): AgentStreamEvent | null {
         return { type: 'meta', thread_id: data.thread_id, user_message_id: data.user_message_id };
       case 'delta':
         return { type: 'delta', text: data.text };
+      case 'tool_use':
+        return { type: 'tool_use', id: data.id, name: data.name, input: data.input ?? {} };
+      case 'tool_result':
+        return {
+          type: 'tool_result',
+          tool_use_id: data.tool_use_id,
+          name: data.name,
+          ok: !!data.ok,
+          data: data.data ?? null,
+          error: data.error ?? null,
+        };
       case 'usage':
         return { type: 'usage', usage: data };
       case 'done':
-        return { type: 'done', stop_reason: data.stop_reason };
+        return { type: 'done', stop_reason: data.stop_reason, iterations: data.iterations };
       case 'error':
         return { type: 'error', message: data.message };
       default:

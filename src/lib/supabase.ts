@@ -1,5 +1,6 @@
 import 'react-native-url-polyfill/auto';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 const url = process.env.EXPO_PUBLIC_SUPABASE_URL;
@@ -11,14 +12,25 @@ if (!url || !anonKey) {
   );
 }
 
+const hasWindow = typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
+
+const noopStorage = {
+  getItem: async () => null,
+  setItem: async () => {},
+  removeItem: async () => {},
+};
+
+const authStorage =
+  Platform.OS === 'web' ? (hasWindow ? window.localStorage : noopStorage) : AsyncStorage;
+
 export const supabase: SupabaseClient = createClient(
   url ?? 'http://localhost:54321',
   anonKey ?? 'public-anon-key-not-set',
   {
     auth: {
-      storage: AsyncStorage,
-      autoRefreshToken: true,
-      persistSession: true,
+      storage: authStorage as never,
+      autoRefreshToken: Platform.OS !== 'web' || hasWindow,
+      persistSession: Platform.OS !== 'web' || hasWindow,
       detectSessionInUrl: false,
     },
   },
@@ -31,8 +43,63 @@ export type Profile = {
   avatar_url: string | null;
   bio: string | null;
   verified_at: string | null;
+  is_admin: boolean;
   created_at: string;
   updated_at: string;
+};
+
+export type VerificationSubmission = {
+  id: string;
+  profile_id: string;
+  passport_url: string;
+  selfie_url: string | null;
+  status: 'pending' | 'approved' | 'rejected';
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  rejection_reason: string | null;
+  created_at: string;
+};
+
+export type Conversation = {
+  id: string;
+  member_id: string;
+  vendor_id: string;
+  source: 'agent' | 'manual' | 'admin';
+  status: 'open' | 'closed' | 'spam';
+  last_message_at: string;
+  last_message_preview: string | null;
+  created_at: string;
+};
+
+export type ConversationMessage = {
+  id: string;
+  conversation_id: string;
+  sender_kind: 'member' | 'vendor' | 'system' | 'agent';
+  sender_profile_id: string | null;
+  sender_vendor_user_id: string | null;
+  body: string;
+  attachments: unknown;
+  read_at: string | null;
+  created_at: string;
+};
+
+export type Reminder = {
+  id: string;
+  profile_id: string;
+  kind: 'visa_expiry' | 'event_rsvp' | 'agent_followup' | 'tax_deadline';
+  fire_at: string;
+  payload: Record<string, unknown>;
+  channel: 'push' | 'inapp';
+  fired_at: string | null;
+  created_at: string;
+};
+
+export type VendorUser = {
+  id: string;
+  auth_user_id: string;
+  vendor_id: string;
+  role: 'owner' | 'agent';
+  created_at: string;
 };
 
 export type IdentityGraph = {

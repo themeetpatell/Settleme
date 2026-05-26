@@ -3,7 +3,7 @@ import { Text } from './Text';
 
 interface BadgeProps {
   label: string;
-  tone?: 'default' | 'emerald' | 'marigold' | 'terracotta';
+  tone?: 'default' | 'emerald' | 'marigold' | 'terracotta' | 'ink';
 }
 
 const toneClass: Record<NonNullable<BadgeProps['tone']>, { bg: string; fg: string }> = {
@@ -11,6 +11,7 @@ const toneClass: Record<NonNullable<BadgeProps['tone']>, { bg: string; fg: strin
   emerald: { bg: 'bg-emerald-100', fg: 'text-emerald-600' },
   marigold: { bg: 'bg-marigold-100', fg: 'text-marigold-600' },
   terracotta: { bg: 'bg-terracotta-100', fg: 'text-terracotta-500' },
+  ink: { bg: 'bg-ink-900', fg: 'text-canvas' },
 };
 
 export function Badge({ label, tone = 'default' }: BadgeProps) {

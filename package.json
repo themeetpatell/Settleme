@@ -14,7 +14,11 @@
     "seed": "tsx scripts/seed.ts",
     "supabase:start": "supabase start",
     "supabase:reset": "supabase db reset",
-    "supabase:serve": "supabase functions serve agent-stream --env-file ./supabase/.env.local"
+    "supabase:serve": "supabase functions serve agent-stream --env-file ./supabase/.env.local",
+    "supabase:serve:reminder": "supabase functions serve reminder-tick --env-file ./supabase/.env.local",
+    "supabase:serve:notify": "supabase functions serve notify-member-of-reply --env-file ./supabase/.env.local",
+    "supabase:serve:admin": "supabase functions serve admin-signed-url --env-file ./supabase/.env.local",
+    "test:supabase": "deno test -A supabase/tests/"
   },
   "dependencies": {
     "@expo/vector-icons": "^14.0.4",
@@ -27,6 +31,7 @@
     "expo-image": "~2.0.0",
     "expo-image-picker": "~16.0.0",
     "expo-linking": "~7.0.0",
+    "expo-notifications": "^0.29.14",
     "expo-router": "~5.0.0",
     "expo-secure-store": "~14.0.0",
     "expo-splash-screen": "~0.29.0",
@@ -43,12 +48,14 @@
     "react-native-svg": "15.8.0",
     "react-native-url-polyfill": "^2.0.0",
     "react-native-web": "~0.19.13",
+    "react-native-worklets": "^0.8.3",
     "tailwindcss": "^3.4.13",
     "zod": "^3.23.8",
     "zustand": "^5.0.0"
   },
   "devDependencies": {
     "@types/react": "~19.1.0",
+    "ajv": "^8.20.0",
     "dotenv": "^16.4.5",
     "eslint": "^9.0.0",
     "eslint-config-expo": "~9.0.0",

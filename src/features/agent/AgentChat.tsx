@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/Input';
 import { Card } from '@/components/ui/Card';
 import { streamAgent } from '@/lib/agentStream';
 import { MessageBubble } from './MessageBubble';
+import { ToolBlock, type UiToolUse } from './ToolBlock';
 import { tap, success, warn } from '@/lib/haptics';
 import { useIdentity } from '@/state/identity';
 
@@ -13,13 +14,14 @@ interface UiMessage {
   id: string;
   role: 'user' | 'assistant';
   text: string;
+  tools: UiToolUse[];
   pending?: boolean;
 }
 
 const SUGGESTIONS = [
-  'How do I open a bank account here as a new arrival?',
+  'Find me a PRO for Emirates ID and start a chat with the best one.',
   'Cheapest way to send AED 10,000 to India this week?',
-  'How do I get my Emirates ID after landing?',
+  'Remind me 60 days before my visa expires.',
   'Best areas in Dubai for a young Indian family?',
 ];
 
@@ -36,7 +38,7 @@ export function AgentChat() {
   const intro = useMemo(() => {
     const city = identity?.dest_city ?? 'your city';
     const name = profile?.display_name?.split(' ')[0] ?? 'there';
-    return `Hi ${name}. I'm SettleMe. Ask me anything about life in ${city} — banking, visa, taxes, schools, neighbourhoods, community. I'll answer in your context.`;
+    return `Hi ${name}. I'm SettleMe. Ask me anything about life in ${city} — banking, visa, taxes, schools, neighbourhoods, community. I'll act on your behalf where I can: find vendors, open chats, set reminders.`;
   }, [identity, profile]);
 
   const askWith = useCallback(
@@ -45,9 +47,20 @@ export function AgentChat() {
       if (!trimmed || streaming) return;
 
       tap();
-      const userMsg: UiMessage = { id: `u_${Date.now()}`, role: 'user', text: trimmed };
+      const userMsg: UiMessage = {
+        id: `u_${Date.now()}`,
+        role: 'user',
+        text: trimmed,
+        tools: [],
+      };
       const asstId = `a_${Date.now()}`;
-      const asstMsg: UiMessage = { id: asstId, role: 'assistant', text: '', pending: true };
+      const asstMsg: UiMessage = {
+        id: asstId,
+        role: 'assistant',
+        text: '',
+        tools: [],
+        pending: true,
+      };
       setMessages((prev) => [...prev, userMsg, asstMsg]);
       setDraft('');
       setStreaming(true);
@@ -66,6 +79,32 @@ export function AgentChat() {
             } else if (e.type === 'delta') {
               setMessages((prev) =>
                 prev.map((m) => (m.id === asstId ? { ...m, text: m.text + e.text } : m)),
+              );
+            } else if (e.type === 'tool_use') {
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === asstId
+                    ? {
+                        ...m,
+                        tools: [...m.tools, { id: e.id, name: e.name, input: e.input }],
+                      }
+                    : m,
+                ),
+              );
+            } else if (e.type === 'tool_result') {
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === asstId
+                    ? {
+                        ...m,
+                        tools: m.tools.map((t) =>
+                          t.id === e.tool_use_id
+                            ? { ...t, result: { ok: e.ok, data: e.data, error: e.error } }
+                            : t,
+                        ),
+                      }
+                    : m,
+                ),
               );
             } else if (e.type === 'done') {
               setMessages((prev) =>
@@ -89,7 +128,11 @@ export function AgentChat() {
         setMessages((prev) =>
           prev.map((m) =>
             m.id === asstId
-              ? { ...m, text: `Sorry, that didn't work. ${err instanceof Error ? err.message : ''}`, pending: false }
+              ? {
+                  ...m,
+                  text: `Sorry, that didn't work. ${err instanceof Error ? err.message : ''}`,
+                  pending: false,
+                }
               : m,
           ),
         );
@@ -145,7 +188,18 @@ export function AgentChat() {
             ref={listRef}
             data={messages}
             keyExtractor={(m) => m.id}
-            renderItem={({ item }) => <MessageBubble role={item.role} text={item.text} pending={item.pending} />}
+            renderItem={({ item }) => (
+              <View>
+                <MessageBubble role={item.role} text={item.text} pending={item.pending} />
+                {item.tools.length > 0 ? (
+                  <View className="my-1 gap-1 pr-8">
+                    {item.tools.map((t) => (
+                      <ToolBlock key={t.id} tool={t} memberProfileId={profile?.id ?? null} />
+                    ))}
+                  </View>
+                ) : null}
+              </View>
+            )}
             contentContainerStyle={{ paddingVertical: 12 }}
             keyboardShouldPersistTaps="handled"
           />

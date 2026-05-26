@@ -7,6 +7,7 @@ export interface OnboardingDraft {
   corridor: string | null;
   arrival_date: string | null;
   visa_status: string | null;
+  visa_expires_on: string | null;
   family_size: number;
   dependents: { name: string; relation: string }[];
 }
@@ -24,6 +25,7 @@ const initial: OnboardingDraft = {
   corridor: 'in_ae',
   arrival_date: null,
   visa_status: null,
+  visa_expires_on: null,
   family_size: 1,
   dependents: [],
 };

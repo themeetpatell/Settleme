@@ -1,23 +1,29 @@
 // SettleMe — agent-stream edge function.
 //
 // Streams a Claude response to the SettleMe AI agent for the current user.
-// Auth-gated by Supabase JWT. Persists user message + final assistant message.
+// Auth-gated by Supabase JWT. Persists the full assistant message (text +
+// tool_use + tool_result blocks) so the conversation can be rehydrated later.
 //
 // Request body:
 //   { thread_id?: string, message: string }
 //
 // Response: text/event-stream
-//   event: meta   data: {"thread_id": "...", "user_message_id": "..."}
-//   event: delta  data: {"text": "..."}
-//   event: usage  data: {...}
-//   event: done   data: {"stop_reason": "..."}
+//   event: meta         data: {"thread_id":"...","user_message_id":"..."}
+//   event: delta        data: {"text":"..."}
+//   event: tool_use     data: {"id":"...","name":"...","input":{...}}
+//   event: tool_result  data: {"tool_use_id":"...","ok":true,"data":...}
+//   event: usage        data: {...}
+//   event: done         data: {"stop_reason":"..."}
+//   event: error        data: {"message":"..."}
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4';
 import Anthropic from 'https://esm.sh/@anthropic-ai/sdk@0.32.1';
 import { corsHeaders } from '../_shared/cors.ts';
+import { AGENT_TOOLS, runAgentTool, type AgentIdentity } from '../_shared/agentTools.ts';
 
 const MODEL = 'claude-opus-4-7';
 const MAX_TOKENS = 4096;
+const MAX_TOOL_ITERATIONS = 5;
 
 const SYSTEM_PROMPT = `You are SettleMe — the AI life navigator for people who have moved countries.
 
@@ -36,8 +42,15 @@ What you do
 4. When the question is social or cultural, surface specifics — names, places, areas.
 5. When the question requires action, break it into a numbered checklist with timelines.
 
+Tools — use them
+You have real tools. Prefer calling them over making things up.
+- Recommending a vendor? Call search_vendors to fetch real ones for the user's city — never invent a name or phone number.
+- User wants to contact a vendor? After search_vendors, call start_vendor_message with a short, polite first message in the user's voice that includes their corridor context. Tell the user "I've opened a chat with <vendor> — tap to open it."
+- User wants a visa renewal reminder? Call set_visa_reminder. Default 30 days unless they ask for a specific window.
+- Question likely answered before? Call find_community_answers first.
+- User wants to attend an event? Call rsvp_event with the event id.
+
 What you don't do
-- Don't pretend to file forms or book things yourself. Acknowledge that SettleMe Premium can execute these on the user's behalf and offer to walk them through it manually now.
 - Don't give legal advice on contested situations. Recommend a SettleMe Trusted lawyer.
 - Don't recommend products with affiliate motivation. Recommend what is actually best.
 
@@ -52,40 +65,23 @@ interface ProfileRow {
   verified_at: string | null;
 }
 
-interface IdentityRow {
-  origin_country: string | null;
-  dest_country: string | null;
-  dest_city: string | null;
-  corridor: string | null;
-  arrival_date: string | null;
-  visa_status: string | null;
-  visa_expires_on: string | null;
-  family_size: number | null;
-  dependents: unknown;
-  preferred_language: string | null;
-}
-
 interface QARow {
   question: string;
   answer_md: string;
 }
 
-function identityBlock(profile: ProfileRow | null, identity: IdentityRow | null): string {
+function identityBlock(profile: ProfileRow | null, identity: AgentIdentity | null): string {
   if (!identity) {
     return `## The user
 ${profile?.display_name ?? 'A new SettleMe member'} — no identity graph yet. Ask one short clarifying question to learn their corridor (origin → destination) before answering anything corridor-specific.`;
   }
-  const dependents = Array.isArray(identity.dependents) ? identity.dependents.length : 0;
   return `## The user
 - Name: ${profile?.display_name ?? 'SettleMe member'}
 - Corridor: ${identity.origin_country ?? '?'} → ${identity.dest_country ?? '?'} (${identity.dest_city ?? 'unknown city'})
-- Arrived: ${identity.arrival_date ?? 'unknown'}
 - Visa: ${identity.visa_status ?? 'unknown'}${identity.visa_expires_on ? `, renews ${identity.visa_expires_on}` : ''}
-- Family in destination: ${identity.family_size ?? 1} (${dependents} dependents)
-- Preferred language: ${identity.preferred_language ?? 'en'}
 - Verified: ${profile?.verified_at ? 'yes' : 'no'}
 
-Anchor every answer to this corridor and stage of life. Reference their city specifically. Don't ask for context you already have above.`;
+Anchor every answer to this corridor and stage of life. Reference their city specifically.`;
 }
 
 function relevantQAKeywords(message: string): string[] {
@@ -105,6 +101,18 @@ function relevantQAKeywords(message: string): string[] {
   }
   return [...new Set(keys)];
 }
+
+type AssistantBlock =
+  | { type: 'text'; text: string }
+  | { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> };
+
+type UserBlock =
+  | { type: 'text'; text: string }
+  | { type: 'tool_result'; tool_use_id: string; content: string; is_error?: boolean };
+
+type ChatMessage =
+  | { role: 'user'; content: UserBlock[] }
+  | { role: 'assistant'; content: AssistantBlock[] };
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
@@ -176,6 +184,13 @@ Deno.serve(async (req) => {
     .select('id')
     .single();
 
+  await admin.from('events_log').insert({
+    profile_id: profile.id,
+    event_name: 'agent_question',
+    props: { thread_id: threadId, length: message.length },
+  });
+
+  // ----- Messages history (last 12, normalize content) -----
   const { data: history } = await admin
     .from('ai_messages')
     .select('role, content')
@@ -183,10 +198,20 @@ Deno.serve(async (req) => {
     .order('created_at', { ascending: true })
     .limit(12);
 
-  const messages = (history ?? [])
+  const messages: ChatMessage[] = (history ?? [])
     .filter((m) => m.role === 'user' || m.role === 'assistant')
-    .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content as unknown }));
+    .map((m) => {
+      const content = m.content as unknown;
+      if (Array.isArray(content)) {
+        return { role: m.role as 'user' | 'assistant', content: content as never };
+      }
+      return {
+        role: m.role as 'user' | 'assistant',
+        content: [{ type: 'text', text: String(content ?? '') }] as never,
+      };
+    });
 
+  // ----- Retrieval (lightweight keyword QA, kept for cheap context) -----
   const keywords = relevantQAKeywords(message);
   let qaContext = '';
   if (keywords.length > 0) {
@@ -213,10 +238,17 @@ Deno.serve(async (req) => {
     },
     {
       type: 'text' as const,
-      text: identityBlock(profile, identity ?? null) + qaContext,
+      text:
+        identityBlock(profile, (identity as AgentIdentity | null) ?? null) + qaContext,
       cache_control: { type: 'ephemeral' as const },
     },
   ];
+
+  const toolCtx = {
+    admin,
+    profileId: profile.id as string,
+    identity: (identity as AgentIdentity | null) ?? null,
+  };
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
@@ -227,43 +259,113 @@ Deno.serve(async (req) => {
 
       send('meta', { thread_id: threadId, user_message_id: userMsg!.id });
 
-      let fullText = '';
-      let usage: unknown = null;
       let stopReason: string | null = null;
+      let lastUsage: unknown = null;
+      let iteration = 0;
 
       try {
-        const result = anthropic.messages.stream({
-          model: MODEL,
-          max_tokens: MAX_TOKENS,
-          system,
-          messages,
-          thinking: { type: 'adaptive' },
-        });
+        while (iteration < MAX_TOOL_ITERATIONS) {
+          iteration += 1;
 
-        for await (const event of result) {
-          if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
-            fullText += event.delta.text;
-            send('delta', { text: event.delta.text });
-          } else if (event.type === 'message_delta') {
-            if (event.usage) usage = event.usage;
-            if (event.delta.stop_reason) stopReason = event.delta.stop_reason;
+          const result = anthropic.messages.stream({
+            model: MODEL,
+            max_tokens: MAX_TOKENS,
+            system,
+            messages: messages as never,
+            tools: AGENT_TOOLS as never,
+          });
+
+          for await (const event of result) {
+            if (
+              event.type === 'content_block_delta' &&
+              event.delta.type === 'text_delta'
+            ) {
+              send('delta', { text: event.delta.text });
+            } else if (event.type === 'message_delta') {
+              if (event.usage) lastUsage = event.usage;
+              if (event.delta.stop_reason) stopReason = event.delta.stop_reason;
+            }
           }
+
+          const finalMsg = await result.finalMessage();
+          const assistantBlocks: AssistantBlock[] = (finalMsg.content as unknown[])
+            .filter((b) => {
+              const block = b as { type: string };
+              return block.type === 'text' || block.type === 'tool_use';
+            })
+            .map((b) => {
+              const block = b as AssistantBlock;
+              return block.type === 'text'
+                ? { type: 'text', text: block.text }
+                : {
+                    type: 'tool_use',
+                    id: block.id,
+                    name: block.name,
+                    input: block.input ?? {},
+                  };
+            });
+
+          await admin.from('ai_messages').insert({
+            thread_id: threadId,
+            role: 'assistant',
+            content: assistantBlocks,
+            model: MODEL,
+            usage: lastUsage,
+          });
+
+          messages.push({ role: 'assistant', content: assistantBlocks });
+
+          const toolUses = assistantBlocks.filter(
+            (b): b is Extract<AssistantBlock, { type: 'tool_use' }> => b.type === 'tool_use',
+          );
+
+          if (stopReason !== 'tool_use' || toolUses.length === 0) {
+            break;
+          }
+
+          const toolResultBlocks: UserBlock[] = [];
+          for (const tu of toolUses) {
+            send('tool_use', { id: tu.id, name: tu.name, input: tu.input });
+
+            const res = await runAgentTool(toolCtx, tu.name, tu.input);
+            send('tool_result', {
+              tool_use_id: tu.id,
+              name: tu.name,
+              ok: res.ok,
+              data: res.data ?? null,
+              error: res.error ?? null,
+            });
+
+            await admin.from('events_log').insert({
+              profile_id: profile.id,
+              event_name: 'agent.tool_use',
+              props: { tool: tu.name, ok: res.ok, error: res.error ?? null },
+            });
+
+            toolResultBlocks.push({
+              type: 'tool_result',
+              tool_use_id: tu.id,
+              content: JSON.stringify(res.ok ? res.data : { error: res.error }),
+              is_error: !res.ok,
+            });
+          }
+
+          await admin.from('ai_messages').insert({
+            thread_id: threadId,
+            role: 'user',
+            content: toolResultBlocks,
+          });
+
+          messages.push({ role: 'user', content: toolResultBlocks });
         }
 
-        await admin.from('ai_messages').insert({
-          thread_id: threadId,
-          role: 'assistant',
-          content: [{ type: 'text', text: fullText }],
-          model: MODEL,
-          usage,
-        });
         await admin
           .from('ai_threads')
           .update({ updated_at: new Date().toISOString() })
           .eq('id', threadId);
 
-        send('usage', usage ?? {});
-        send('done', { stop_reason: stopReason ?? 'end_turn' });
+        send('usage', lastUsage ?? {});
+        send('done', { stop_reason: stopReason ?? 'end_turn', iterations: iteration });
       } catch (err) {
         send('error', { message: err instanceof Error ? err.message : String(err) });
       } finally {

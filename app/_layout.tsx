@@ -7,6 +7,10 @@ import { StatusBar } from 'expo-status-bar';
 import { queryClient } from '@/lib/queryClient';
 import { supabase } from '@/lib/supabase';
 import { useIdentity } from '@/state/identity';
+import { registerForPushAsync } from '@/lib/pushNotifications';
+import { initSentry } from '@/lib/sentry';
+
+initSentry();
 
 function AuthGate() {
   const router = useRouter();
@@ -14,8 +18,10 @@ function AuthGate() {
   const profile = useIdentity((s) => s.profile);
   const identity = useIdentity((s) => s.identity);
   const hydrated = useIdentity((s) => s.hydrated);
+  const isVendor = useIdentity((s) => s.isVendor);
   const setProfile = useIdentity((s) => s.setProfile);
   const setIdentity = useIdentity((s) => s.setIdentity);
+  const setIsVendor = useIdentity((s) => s.setIsVendor);
   const markHydrated = useIdentity((s) => s.markHydrated);
 
   useEffect(() => {
@@ -26,17 +32,18 @@ function AuthGate() {
         if (mounted) {
           setProfile(null);
           setIdentity(null);
+          setIsVendor(false);
           markHydrated();
         }
         return;
       }
-      const { data: p } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('auth_user_id', authUserId)
-        .maybeSingle();
+      const [{ data: p }, { data: vu }] = await Promise.all([
+        supabase.from('profiles').select('*').eq('auth_user_id', authUserId).maybeSingle(),
+        supabase.from('vendor_users').select('id').eq('auth_user_id', authUserId).maybeSingle(),
+      ]);
       if (!mounted) return;
       setProfile(p ?? null);
+      setIsVendor(!!vu);
       if (p) {
         const { data: i } = await supabase
           .from('identity_graph')
@@ -58,22 +65,33 @@ function AuthGate() {
       mounted = false;
       sub.subscription.unsubscribe();
     };
-  }, [setProfile, setIdentity, markHydrated]);
+  }, [setProfile, setIdentity, setIsVendor, markHydrated]);
+
+  useEffect(() => {
+    if (profile?.id) {
+      registerForPushAsync(profile.id).catch(() => undefined);
+    }
+  }, [profile?.id]);
 
   useEffect(() => {
     if (!hydrated) return;
     const group = segments[0] ?? '';
+    // (vendor) and (admin) own their own auth/access gates.
+    if (group === '(vendor)' || group === '(admin)') return;
+
     const signedIn = !!profile;
     const onboarded = !!identity?.corridor;
 
     if (!signedIn && group !== '(auth)') {
       router.replace('/(auth)/welcome');
+    } else if (signedIn && isVendor) {
+      router.replace('/(vendor)/inbox');
     } else if (signedIn && !onboarded && group !== '(onboarding)') {
       router.replace('/(onboarding)/corridor');
     } else if (signedIn && onboarded && (group === '(auth)' || group === '(onboarding)')) {
       router.replace('/(tabs)');
     }
-  }, [hydrated, profile, identity, segments, router]);
+  }, [hydrated, profile, identity, isVendor, segments, router]);
 
   return null;
 }
@@ -88,6 +106,9 @@ export default function RootLayout() {
           <Stack.Screen name="(auth)" />
           <Stack.Screen name="(onboarding)" />
           <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="(messaging)" />
+          <Stack.Screen name="(vendor)" />
+          <Stack.Screen name="(admin)" />
         </Stack>
       </QueryClientProvider>
     </GestureHandlerRootView>
