@@ -1,9 +1,27 @@
 import '../global.css';
 import { useEffect } from 'react';
+import { View } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StatusBar } from 'expo-status-bar';
+import * as SplashScreen from 'expo-splash-screen';
+import {
+  useFonts as useFraunces,
+  Fraunces_400Regular,
+  Fraunces_500Medium,
+  Fraunces_600SemiBold,
+  Fraunces_700Bold,
+  Fraunces_400Regular_Italic,
+  Fraunces_600SemiBold_Italic,
+} from '@expo-google-fonts/fraunces';
+import {
+  useFonts as useInter,
+  Inter_400Regular,
+  Inter_500Medium,
+  Inter_600SemiBold,
+  Inter_700Bold,
+} from '@expo-google-fonts/inter';
 import { queryClient } from '@/lib/queryClient';
 import { supabase } from '@/lib/supabase';
 import { useIdentity } from '@/state/identity';
@@ -11,6 +29,7 @@ import { registerForPushAsync } from '@/lib/pushNotifications';
 import { initSentry } from '@/lib/sentry';
 
 initSentry();
+SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
 function AuthGate() {
   const router = useRouter();
@@ -76,7 +95,6 @@ function AuthGate() {
   useEffect(() => {
     if (!hydrated) return;
     const group = segments[0] ?? '';
-    // (vendor) and (admin) own their own auth/access gates.
     if (group === '(vendor)' || group === '(admin)') return;
 
     const signedIn = !!profile;
@@ -97,12 +115,39 @@ function AuthGate() {
 }
 
 export default function RootLayout() {
+  const [fraunces] = useFraunces({
+    Fraunces_400Regular,
+    Fraunces_500Medium,
+    Fraunces_600SemiBold,
+    Fraunces_700Bold,
+    Fraunces_400Regular_Italic,
+    Fraunces_600SemiBold_Italic,
+  });
+  const [inter] = useInter({
+    Inter_400Regular,
+    Inter_500Medium,
+    Inter_600SemiBold,
+    Inter_700Bold,
+  });
+
+  const ready = fraunces && inter;
+
+  useEffect(() => {
+    if (ready) SplashScreen.hideAsync().catch(() => undefined);
+  }, [ready]);
+
+  if (!ready) {
+    return <View style={{ flex: 1, backgroundColor: '#FBF8F2' }} />;
+  }
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <QueryClientProvider client={queryClient}>
         <StatusBar style="auto" />
         <AuthGate />
-        <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#FBF8F2' } }}>
+        <Stack
+          screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#FBF8F2' } }}
+        >
           <Stack.Screen name="(auth)" />
           <Stack.Screen name="(onboarding)" />
           <Stack.Screen name="(tabs)" />

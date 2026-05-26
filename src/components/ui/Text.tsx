@@ -34,13 +34,13 @@ const variantClass: Record<Variant, string> = {
     'font-display text-[36px] leading-[1.08] tracking-tight text-ink-900 dark:text-sand-50',
   h1: 'font-display text-[28px] leading-[1.15] tracking-tight text-ink-900 dark:text-sand-50',
   h2: 'font-display text-[22px] leading-snug text-ink-900 dark:text-sand-50',
-  h3: 'text-[17px] font-semibold leading-snug text-ink-900 dark:text-sand-50',
+  h3: 'font-sans-semibold text-[17px] leading-snug text-ink-900 dark:text-sand-50',
   eyebrow:
-    'text-[11px] font-semibold uppercase tracking-[0.18em] text-ink-400 dark:text-ink-300',
-  'body-lg': 'text-[17px] leading-[1.55] text-ink-800 dark:text-ink-100',
-  body: 'text-[15px] leading-[1.55] text-ink-800 dark:text-ink-100',
-  small: 'text-[13px] leading-[1.5] text-ink-700 dark:text-ink-200',
-  caption: 'text-[11px] leading-[1.45] text-ink-500 dark:text-ink-300',
+    'font-sans-semibold text-[11px] uppercase tracking-[0.18em] text-ink-400 dark:text-ink-300',
+  'body-lg': 'font-sans text-[17px] leading-[1.55] text-ink-800 dark:text-ink-100',
+  body: 'font-sans text-[15px] leading-[1.55] text-ink-800 dark:text-ink-100',
+  small: 'font-sans text-[13px] leading-[1.5] text-ink-700 dark:text-ink-200',
+  caption: 'font-sans text-[11px] leading-[1.45] text-ink-500 dark:text-ink-300',
   mono: 'font-mono text-[13px] text-ink-700 dark:text-ink-100',
 };
 

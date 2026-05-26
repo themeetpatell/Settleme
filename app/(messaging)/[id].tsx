@@ -6,11 +6,35 @@ import { Screen } from '@/components/ui/Screen';
 import { Text } from '@/components/ui/Text';
 import { Badge } from '@/components/ui/Badge';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { GradientCover } from '@/components/ui/GradientCover';
 import { ChatBubble } from '@/features/messaging/ChatBubble';
 import { Composer } from '@/features/messaging/Composer';
 import { supabase, type Conversation, type ConversationMessage } from '@/lib/supabase';
 import { useIdentity } from '@/state/identity';
 import { warn } from '@/lib/haptics';
+
+const CATEGORY_EMOJI: Record<string, string> = {
+  pro: '📋',
+  lawyer: '⚖️',
+  accountant: '🧮',
+  property: '🏛️',
+  school: '🎓',
+  dentist: '🩺',
+  movers: '📦',
+};
+
+const CATEGORY_PALETTE: Record<
+  string,
+  'marigold' | 'emerald' | 'cobalt' | 'terracotta' | 'sunset' | 'dusk' | 'ink'
+> = {
+  pro: 'marigold',
+  lawyer: 'cobalt',
+  accountant: 'emerald',
+  property: 'sunset',
+  school: 'cobalt',
+  dentist: 'terracotta',
+  movers: 'dusk',
+};
 
 type ConversationWithVendor = Conversation & {
   vendor: { id: string; name: string; category: string; whatsapp: string | null } | null;
@@ -102,14 +126,29 @@ export default function ThreadScreen() {
   return (
     <Screen>
       <Stack.Screen options={{ title: conv?.vendor?.name ?? 'Chat' }} />
-      <View className="border-b border-ink-100 px-6 pb-3 pt-2 dark:border-ink-700">
-        <View className="flex-row items-center gap-2">
-          <Text variant="h3">{conv?.vendor?.name ?? 'Vendor'}</Text>
-          {conv?.vendor?.category ? <Badge label={conv.vendor.category} tone="ink" /> : null}
+      <View className="border-b border-ink-100 px-6 pb-4 pt-2 dark:border-ink-700">
+        <View className="flex-row items-center gap-3">
+          <GradientCover
+            palette={CATEGORY_PALETTE[conv?.vendor?.category ?? 'pro'] ?? 'marigold'}
+            radius={20}
+            className="h-12 w-12 items-center justify-center"
+          >
+            <Text variant="h3" className="leading-none">
+              {CATEGORY_EMOJI[conv?.vendor?.category ?? 'pro'] ?? '✨'}
+            </Text>
+          </GradientCover>
+          <View className="flex-1">
+            <Text variant="h3">{conv?.vendor?.name ?? 'Vendor'}</Text>
+            <View className="mt-1 flex-row items-center gap-2">
+              {conv?.vendor?.category ? (
+                <Badge label={conv.vendor.category} tone="default" />
+              ) : null}
+              <Text variant="caption" muted>
+                Replies within 1 business day
+              </Text>
+            </View>
+          </View>
         </View>
-        <Text variant="caption" muted className="mt-1">
-          You're chatting via SettleMe. Replies are typically within 1 business day.
-        </Text>
       </View>
 
       <View className="flex-1 px-4">

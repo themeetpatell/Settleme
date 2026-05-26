@@ -65,7 +65,7 @@ export function Badge({
       {icon ? <View className="mr-1.5">{icon}</View> : null}
       <Text
         variant="caption"
-        className={`font-semibold uppercase tracking-[0.12em] ${t.fg}`}
+        className={`font-sans-semibold uppercase tracking-[0.12em] ${t.fg}`}
       >
         {label}
       </Text>

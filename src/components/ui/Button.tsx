@@ -108,7 +108,7 @@ export function Button({
             {leading ? <View className="mr-2">{leading}</View> : null}
             <Text
               variant={size === 'lg' ? 'body-lg' : 'body'}
-              className={`font-semibold ${labelClass[variant]}`}
+              className={`font-sans-semibold ${labelClass[variant]}`}
             >
               {title}
             </Text>

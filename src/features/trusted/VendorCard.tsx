@@ -1,9 +1,11 @@
 import { View } from 'react-native';
 import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { Card } from '@/components/ui/Card';
 import { Text } from '@/components/ui/Text';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
+import { GradientCover } from '@/components/ui/GradientCover';
 import { supabase, type Vendor } from '@/lib/supabase';
 import { useIdentity } from '@/state/identity';
 import { tap, success, warn } from '@/lib/haptics';
@@ -21,6 +23,29 @@ const CATEGORY_LABEL: Record<string, string> = {
   school: 'School',
   dentist: 'Doctor',
   movers: 'Movers',
+};
+
+const CATEGORY_EMOJI: Record<string, string> = {
+  pro: '📋',
+  lawyer: '⚖️',
+  accountant: '🧮',
+  property: '🏛️',
+  school: '🎓',
+  dentist: '🩺',
+  movers: '📦',
+};
+
+const CATEGORY_PALETTE: Record<
+  string,
+  'marigold' | 'emerald' | 'cobalt' | 'terracotta' | 'sunset' | 'dusk' | 'ink'
+> = {
+  pro: 'marigold',
+  lawyer: 'cobalt',
+  accountant: 'emerald',
+  property: 'sunset',
+  school: 'cobalt',
+  dentist: 'terracotta',
+  movers: 'dusk',
 };
 
 export function VendorCard({ vendor, onPress }: VendorCardProps) {
@@ -77,29 +102,51 @@ export function VendorCard({ vendor, onPress }: VendorCardProps) {
     }
   }
 
-  return (
-    <Card onPress={onPress}>
-      <View className="flex-row items-start justify-between">
-        <Badge label={CATEGORY_LABEL[vendor.category] ?? vendor.category} tone="default" />
-        {vendor.verified_at ? <Badge label="Verified" tone="emerald" /> : null}
-      </View>
-      <Text variant="h3" className="mt-2">
-        {vendor.name}
-      </Text>
-      {vendor.description ? (
-        <Text variant="small" muted className="mt-1">
-          {vendor.description}
-        </Text>
-      ) : null}
-      <View className="mt-3 flex-row items-center gap-3">
-        <Text variant="small" className="font-semibold">
-          ★ {vendor.rating.toFixed(1)}
-        </Text>
-        <Text variant="caption">{vendor.review_count} reviews</Text>
-      </View>
+  const palette = CATEGORY_PALETTE[vendor.category] ?? 'marigold';
+  const emoji = CATEGORY_EMOJI[vendor.category] ?? '✨';
 
-      <View className="mt-3">
-        <Button title="Message" size="sm" onPress={startMessage} disabled={!profile?.id} />
+  return (
+    <Card onPress={onPress} elevation={2} className="overflow-hidden p-0">
+      <GradientCover palette={palette} height={64}>
+        <View className="flex-1 flex-row items-end justify-between p-4">
+          <View className="h-12 w-12 items-center justify-center rounded-2xl bg-white/95">
+            <Text variant="h2" className="leading-none">
+              {emoji}
+            </Text>
+          </View>
+          {vendor.verified_at ? <Badge label="Verified" tone="emerald" /> : null}
+        </View>
+      </GradientCover>
+
+      <View className="p-5 pt-3">
+        <Badge label={CATEGORY_LABEL[vendor.category] ?? vendor.category} tone="default" />
+        <Text variant="h3" className="mt-2">
+          {vendor.name}
+        </Text>
+        {vendor.description ? (
+          <Text variant="small" muted className="mt-1">
+            {vendor.description}
+          </Text>
+        ) : null}
+        <View className="mt-3 flex-row items-center gap-3">
+          <View className="flex-row items-center gap-1">
+            <Ionicons name="star" size={14} color="#F4A227" />
+            <Text variant="small" className="font-sans-semibold">
+              {vendor.rating.toFixed(1)}
+            </Text>
+          </View>
+          <Text variant="caption">{vendor.review_count} reviews</Text>
+        </View>
+
+        <View className="mt-4">
+          <Button
+            title="Message"
+            size="sm"
+            onPress={startMessage}
+            disabled={!profile?.id}
+            leading={<Ionicons name="chatbubble-outline" size={14} color="#FBF8F2" />}
+          />
+        </View>
       </View>
     </Card>
   );

@@ -88,8 +88,12 @@ module.exports = {
         canvas: { DEFAULT: '#FBF8F2', dark: '#0A0E17' },
       },
       fontFamily: {
-        display: ['Iowan Old Style', 'Apple Garamond', 'Baskerville', 'Times New Roman', 'serif'],
-        sans: ['-apple-system', 'BlinkMacSystemFont', 'Inter', 'Segoe UI', 'Helvetica', 'sans-serif'],
+        display: ['Fraunces_500Medium', 'Iowan Old Style', 'Baskerville', 'serif'],
+        'display-bold': ['Fraunces_700Bold', 'Iowan Old Style', 'serif'],
+        sans: ['Inter_400Regular', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'sans-serif'],
+        'sans-medium': ['Inter_500Medium', '-apple-system', 'sans-serif'],
+        'sans-semibold': ['Inter_600SemiBold', '-apple-system', 'sans-serif'],
+        'sans-bold': ['Inter_700Bold', '-apple-system', 'sans-serif'],
         mono: ['SF Mono', 'Menlo', 'Consolas', 'monospace'],
       },
       fontSize: {
