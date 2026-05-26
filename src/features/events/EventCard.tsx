@@ -1,11 +1,14 @@
 import { View } from 'react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Card } from '@/components/ui/Card';
 import { Text } from '@/components/ui/Text';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { supabase, type EventRow } from '@/lib/supabase';
 import { useIdentity } from '@/state/identity';
+import { eventImage } from '@/lib/aiImage';
 import { success, warn } from '@/lib/haptics';
 
 interface EventCardProps {
@@ -91,31 +94,56 @@ export function EventCard({ event, onPress }: EventCardProps) {
   });
 
   const isGoing = rsvpQuery.data === 'going';
+  const imageUrl = eventImage(event.id, event.kind);
 
   return (
-    <Card onPress={onPress}>
-      <Badge label={event.kind} tone={KIND_TONE[event.kind]} />
-      <Text variant="h3" className="mt-2">
-        {event.title}
-      </Text>
-      <Text variant="small" muted className="mt-1">
-        {dateLabel} · {timeLabel} · {event.location ?? 'Online'}
-      </Text>
-      {event.host_name ? (
-        <Text variant="caption" className="mt-2">
-          Hosted by {event.host_name}
-        </Text>
-      ) : null}
-
-      <View className="mt-3">
-        <Button
-          title={isGoing ? "You're going ✓ — tap to cancel" : 'RSVP'}
-          variant={isGoing ? 'ghost' : 'primary'}
-          size="sm"
-          onPress={() => rsvp.mutate()}
-          loading={rsvp.isPending}
-          disabled={!profile?.id}
+    <Card onPress={onPress} elevation={2} className="overflow-hidden p-0">
+      <View className="h-36 w-full overflow-hidden bg-sand-100 dark:bg-ink-700">
+        <Image
+          source={{ uri: imageUrl }}
+          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+          contentFit="cover"
+          transition={250}
+          cachePolicy="memory-disk"
         />
+        <LinearGradient
+          colors={['transparent', 'rgba(10,14,23,0.55)']}
+          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+        />
+        <View className="flex-1 flex-row items-end justify-between p-4">
+          <View className="items-center rounded-2xl bg-white/95 px-3 py-2 shadow-e2">
+            <Text variant="caption" className="font-sans-semibold text-ink-500">
+              {date.toLocaleDateString(undefined, { month: 'short' }).toUpperCase()}
+            </Text>
+            <Text variant="h2" className="leading-none">
+              {date.getDate()}
+            </Text>
+          </View>
+          <Badge label={event.kind} tone={KIND_TONE[event.kind]} />
+        </View>
+      </View>
+
+      <View className="p-5 pt-3">
+        <Text variant="h3">{event.title}</Text>
+        <Text variant="small" muted className="mt-1">
+          {dateLabel} · {timeLabel} · {event.location ?? 'Online'}
+        </Text>
+        {event.host_name ? (
+          <Text variant="caption" className="mt-2">
+            Hosted by {event.host_name}
+          </Text>
+        ) : null}
+
+        <View className="mt-4">
+          <Button
+            title={isGoing ? "You're going ✓ — tap to cancel" : 'RSVP'}
+            variant={isGoing ? 'ghost' : 'primary'}
+            size="sm"
+            onPress={() => rsvp.mutate()}
+            loading={rsvp.isPending}
+            disabled={!profile?.id}
+          />
+        </View>
       </View>
     </Card>
   );

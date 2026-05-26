@@ -1,13 +1,15 @@
 import { View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Card } from '@/components/ui/Card';
 import { Text } from '@/components/ui/Text';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import { GradientCover } from '@/components/ui/GradientCover';
 import { supabase, type Vendor } from '@/lib/supabase';
 import { useIdentity } from '@/state/identity';
+import { vendorImage } from '@/lib/aiImage';
 import { tap, success, warn } from '@/lib/haptics';
 
 interface VendorCardProps {
@@ -33,19 +35,6 @@ const CATEGORY_EMOJI: Record<string, string> = {
   school: '🎓',
   dentist: '🩺',
   movers: '📦',
-};
-
-const CATEGORY_PALETTE: Record<
-  string,
-  'marigold' | 'emerald' | 'cobalt' | 'terracotta' | 'sunset' | 'dusk' | 'ink'
-> = {
-  pro: 'marigold',
-  lawyer: 'cobalt',
-  accountant: 'emerald',
-  property: 'sunset',
-  school: 'cobalt',
-  dentist: 'terracotta',
-  movers: 'dusk',
 };
 
 export function VendorCard({ vendor, onPress }: VendorCardProps) {
@@ -102,21 +91,32 @@ export function VendorCard({ vendor, onPress }: VendorCardProps) {
     }
   }
 
-  const palette = CATEGORY_PALETTE[vendor.category] ?? 'marigold';
   const emoji = CATEGORY_EMOJI[vendor.category] ?? '✨';
+  const imageUrl = vendorImage(vendor.id, vendor.category);
 
   return (
     <Card onPress={onPress} elevation={2} className="overflow-hidden p-0">
-      <GradientCover palette={palette} height={64}>
+      <View className="h-36 w-full overflow-hidden bg-sand-100 dark:bg-ink-700">
+        <Image
+          source={{ uri: imageUrl }}
+          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+          contentFit="cover"
+          transition={250}
+          cachePolicy="memory-disk"
+        />
+        <LinearGradient
+          colors={['transparent', 'rgba(10,14,23,0.45)']}
+          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+        />
         <View className="flex-1 flex-row items-end justify-between p-4">
-          <View className="h-12 w-12 items-center justify-center rounded-2xl bg-white/95">
+          <View className="h-12 w-12 items-center justify-center rounded-2xl bg-white/95 shadow-e2">
             <Text variant="h2" className="leading-none">
               {emoji}
             </Text>
           </View>
           {vendor.verified_at ? <Badge label="Verified" tone="emerald" /> : null}
         </View>
-      </GradientCover>
+      </View>
 
       <View className="p-5 pt-3">
         <Badge label={CATEGORY_LABEL[vendor.category] ?? vendor.category} tone="default" />

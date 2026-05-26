@@ -2,11 +2,13 @@ import { useState } from 'react';
 import { View, Alert } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { Screen } from '@/components/ui/Screen';
 import { Text } from '@/components/ui/Text';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
+import { GradientCover } from '@/components/ui/GradientCover';
 import { useOnboarding } from '@/state/onboarding';
 import { useIdentity } from '@/state/identity';
 import { supabase } from '@/lib/supabase';
@@ -129,30 +131,65 @@ export default function OnboardingVerify() {
 
   return (
     <Screen scroll>
-      <View className="px-6 pt-12">
-        <Badge label="Verification" tone="marigold" />
-        <Text variant="h1" className="mt-4">
-          Verify with your passport.
-        </Text>
-        <Text variant="body" muted className="mt-2">
-          Verified members can post in communities, leave reviews on Trusted vendors, and message
-          verified vendors. Photo stays in our encrypted vault.
-        </Text>
+      <View className="px-6 pt-6">
+        <GradientCover
+          palette="sunset"
+          radius={28}
+          className="h-32 items-center justify-center shadow-e3"
+        >
+          <View className="h-16 w-16 items-center justify-center rounded-3xl bg-white/95 shadow-e1">
+            <Ionicons name="shield-checkmark-outline" size={28} color="#9A5814" />
+          </View>
+        </GradientCover>
+
+        <View className="mt-6">
+          <Badge label="Verification" tone="marigold" dot />
+          <Text variant="h1" className="mt-3">
+            Verify with your passport.
+          </Text>
+          <Text variant="body" muted className="mt-2">
+            Verified members can post in communities, leave reviews on Trusted vendors, and message
+            verified vendors. Your photo stays in our encrypted vault.
+          </Text>
+        </View>
 
         <View className="mt-6 gap-3">
-          <Card onPress={pickPassport}>
-            <Text variant="h3">{picked ? 'Passport added ✓' : 'Upload passport photo'}</Text>
-            <Text variant="small" muted>
-              Photo page only. Auto-cropped, never shared.
-            </Text>
+          <Card onPress={pickPassport} elevation={picked ? 2 : 1}>
+            <View className="flex-row items-center gap-3">
+              <View
+                className={`h-12 w-12 items-center justify-center rounded-2xl ${
+                  picked ? 'bg-emerald-100' : 'bg-sand-100 dark:bg-ink-700'
+                }`}
+              >
+                <Ionicons
+                  name={picked ? 'checkmark-circle' : 'cloud-upload-outline'}
+                  size={22}
+                  color={picked ? '#125E40' : '#0A0E17'}
+                />
+              </View>
+              <View className="flex-1">
+                <Text variant="h3">
+                  {picked ? 'Passport added' : 'Upload passport photo'}
+                </Text>
+                <Text variant="small" muted className="mt-0.5">
+                  Photo page only. Auto-cropped, never shared.
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color="#5A6677" />
+            </View>
           </Card>
 
           {picked ? (
-            <Card>
-              <Badge label="Pending review" tone="marigold" />
-              <Text variant="small" muted className="mt-2">
-                Most submissions are reviewed within 24 hours. You'll get a push notification.
-              </Text>
+            <Card variant="tinted" tone="marigold">
+              <View className="flex-row items-start gap-3">
+                <Ionicons name="hourglass-outline" size={18} color="#9A5814" />
+                <View className="flex-1">
+                  <Text variant="h3">Pending review</Text>
+                  <Text variant="small" className="mt-1 text-marigold-700 dark:text-marigold-300">
+                    Most submissions are reviewed within 24 hours. You'll get a push notification.
+                  </Text>
+                </View>
+              </View>
             </Card>
           ) : null}
         </View>

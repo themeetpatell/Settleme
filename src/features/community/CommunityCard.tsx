@@ -1,11 +1,13 @@
 import { View } from 'react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Image } from 'expo-image';
 import { Card } from '@/components/ui/Card';
 import { Text } from '@/components/ui/Text';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { supabase, type Community } from '@/lib/supabase';
 import { useIdentity } from '@/state/identity';
+import { communityImage } from '@/lib/aiImage';
 import { success, warn } from '@/lib/haptics';
 
 interface CommunityCardProps {
@@ -71,23 +73,37 @@ export function CommunityCard({ community, onPress }: CommunityCardProps) {
   });
 
   const isMember = membershipQuery.data === true;
+  const imageUrl = communityImage(community.id, community.kind);
 
   return (
     <Card onPress={onPress}>
-      <Badge label={KIND_LABEL[community.kind]} tone="marigold" />
-      <Text variant="h3" className="mt-2">
-        {community.name}
-      </Text>
-      {community.description ? (
-        <Text variant="small" muted className="mt-1">
-          {community.description}
-        </Text>
-      ) : null}
-      <Text variant="caption" className="mt-3">
-        {community.member_count.toLocaleString()} verified members
-      </Text>
+      <View className="flex-row gap-4">
+        <View className="h-20 w-20 overflow-hidden rounded-2xl bg-sand-100 dark:bg-ink-700">
+          <Image
+            source={{ uri: imageUrl }}
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+            contentFit="cover"
+            transition={250}
+            cachePolicy="memory-disk"
+          />
+        </View>
+        <View className="flex-1">
+          <Badge label={KIND_LABEL[community.kind]} tone="marigold" />
+          <Text variant="h3" className="mt-2">
+            {community.name}
+          </Text>
+          {community.description ? (
+            <Text variant="small" muted className="mt-1" numberOfLines={2}>
+              {community.description}
+            </Text>
+          ) : null}
+          <Text variant="caption" className="mt-2">
+            {community.member_count.toLocaleString()} verified members
+          </Text>
+        </View>
+      </View>
 
-      <View className="mt-3">
+      <View className="mt-4">
         <Button
           title={isMember ? 'Joined ✓ — tap to leave' : 'Join'}
           variant={isMember ? 'ghost' : 'primary'}
