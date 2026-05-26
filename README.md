@@ -159,3 +159,4 @@ Model ID, system prompt, and retrieval logic live in `supabase/functions/agent-s
 ## License
 
 Proprietary. © 2026 SettleMe.
+# Settleme
